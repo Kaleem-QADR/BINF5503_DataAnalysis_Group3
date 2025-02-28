@@ -396,7 +396,7 @@ dds$condition <- relevel(dds$condition, ref = "D0")
 # Run DESeq2 normalization & analysis
 dds_out <- DESeq(dds)
 res <- results(dds_out, alpha = 0.05)
-summary(res)
+#summary(res)
 
 # Convert results to a dataframe
 res_df <- as.data.frame(res)
@@ -469,23 +469,11 @@ if (length(top_genes) > 0) {
 
 ```
 
-Figure 2. Heatmap of Top 30 Differentially Expressed Genes Hierarchical clustering reveals distinct expression patterns between Day 0 and Day 6, with several genes showing marked upregulation or downregulation. Genes such as CYP1A1 and CHGA exhibit strong differential expression, suggesting their involvement in adaptive cellular responses.
+Figure 2. **Heatmap of Top 30 Differentially Expressed Genes.** Hierarchical clustering reveals distinct expression patterns between Day 0 and Day 6, with several genes showing marked upregulation or downregulation. Genes such as CYP1A1 and CHGA exhibit strong differential expression, suggesting their involvement in adaptive cellular responses.
 
 ### **6.3 Summary Table of Top Differentially Expressed Genes**
 
 The table below lists the top 10 upregulated and 10 downregulated genes ranked by log2FC.
-
-**Table 1.** Top Differentially Expressed Genes
-
-knitr::kable(top_genes_table,
-
-caption = "Table 1. Top 20 Differentially Expressed Genes",
-
-col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"),
-
-format = "latex",
-
-booktabs = TRUE)
 
 ```{r data_degtable, message=FALSE, warning=FALSE}
 
@@ -508,7 +496,7 @@ write.csv(top_genes_table, "Top_20_DEGs.csv", row.names = FALSE)
 
 # Display table
 knitr::kable(top_genes_table, 
-             caption = "Table 1. Top 20 Differentially Expressed Genes", 
+             caption = "Top 20 Differentially Expressed Genes", 
              col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"),
              booktabs = TRUE) %>%
   kable_styling(full_width = FALSE, 

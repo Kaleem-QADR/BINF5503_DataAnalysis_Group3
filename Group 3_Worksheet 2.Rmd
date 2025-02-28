@@ -4,6 +4,8 @@ output:
   pdf_document:
     latex_engine: xelatex
     number_sections: false
+    keep_tex: true
+always_allow_html: true
 geometry: margin=1in  
 fontsize: 12pt
 ---
@@ -353,9 +355,9 @@ data_list <- setNames(lapply(seq_along(file_paths), function(i) {
 merged_data <- bind_rows(data_list)
 
 # Check loaded data
-print(dim(merged_data))  # Rows x Columns
-print(head(merged_data))  # Preview first few rows
-print(unique(merged_data$Sample))  # Ensure sample names are correct
+# print(dim(merged_data))  # Rows x Columns
+# print(head(merged_data))  # Preview first few rows
+# print(unique(merged_data$Sample))  # Ensure sample names are correct
 
 # ============================
 # Step 2: Prepare Data for DESeq2
@@ -378,8 +380,8 @@ count_matrix <- merged_data %>%
 count_matrix <- as.matrix(count_matrix)
 
 # Check matrix format
-print(dim(count_matrix))  # Genes x Samples
-print(head(rownames(count_matrix), 10))  # Should return Ensembl IDs
+#print(dim(count_matrix))  # Genes x Samples
+#print(head(rownames(count_matrix), 10))  # Should return Ensembl IDs
 
 # ============================
 # Step 3: Differential Expression Analysis
@@ -475,13 +477,21 @@ The table below lists the top 10 upregulated and 10 downregulated genes ranked b
 
 **Table 1.** Top Differentially Expressed Genes
 
+knitr::kable(top_genes_table,
+
+caption = "Table 1. Top 20 Differentially Expressed Genes",
+
+col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"),
+
+format = "latex",
+
+booktabs = TRUE)
+
 ```{r data_degtable, message=FALSE, warning=FALSE}
 
 # ============================
 # Step 5: Table of Top DEGs
 # ============================
-
-library(kableExtra)
 
 # Select top 10 upregulated and downregulated genes using head()
 top_up <- res_df %>% filter(padj < 0.05) %>% arrange(desc(log2FoldChange)) %>% head(10)
@@ -496,17 +506,15 @@ top_genes_table$gene[is.na(top_genes_table$gene)] <- top_genes_table$gene[is.na(
 # Save as CSV
 write.csv(top_genes_table, "Top_20_DEGs.csv", row.names = FALSE)
 
-# Display table using kableExtra with APA formatting
+# Display table
 knitr::kable(top_genes_table, 
-             caption = "Table 1. \n Top 20 Differentially Expressed Genes",
-             col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"), 
-             format = "html") %>%
+             caption = "Table 1. Top 20 Differentially Expressed Genes", 
+             col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"),
+             booktabs = TRUE) %>%
   kable_styling(full_width = FALSE, 
                 position = "center", 
-                bootstrap_options = c("striped", "hover")) %>%
-  add_footnote("Note. Genes shown are the top differentially expressed genes based on log2 fold change and adjusted p-values. Adjusted p-values (padj) < 0.05 indicate statistical significance.", 
-               notation = "none")
-
+                latex_options = c("striped", "hold_position")) %>%
+  row_spec(0, bold = TRUE, font_size = 12)
 
 ```
 
@@ -559,9 +567,6 @@ go_results <- enrichGO(
   pvalueCutoff  = 0.05
 )
 
-# Print summary
-print(head(go_results))
-
 # Save results
 write.csv(as.data.frame(go_results), "GO_Enrichment_Results.csv", row.names = FALSE)
 
@@ -583,9 +588,6 @@ kegg_results <- enrichKEGG(
   pAdjustMethod = "BH",
   pvalueCutoff  = 0.05
 )
-
-# Print summary
-print(head(kegg_results))
 
 # Save results
 write.csv(as.data.frame(kegg_results), "KEGG_Enrichment_Results.csv", row.names = FALSE)

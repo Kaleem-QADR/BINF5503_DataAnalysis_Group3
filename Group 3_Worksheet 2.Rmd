@@ -1,0 +1,638 @@
+---
+title: "Worksheet 1"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: false
+geometry: margin=1in  
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE, comment = NA, width = 70)
+knitr::opts_chunk$set(results = "hold")
+options(width = 70) # Adjust console width
+```
+
+## Cancer Transcriptomics Dataset Analysis
+
+Authors: Daniel Esguerra, Kaleemuddin Mohammed, Reethigha Uruthiran, Siddhi Naik
+
+### **1. Introduction**
+
+**Field Overview:** The dataset originates from the field of cancer transcriptomics, a branch of molecular biology that studies gene expression through RNA sequencing (RNA-seq) in cancer cells. Transcriptomics provides insight into how genes are regulated in various conditions, such as disease progression or drug response.
+
+In cancer research, patient-derived organoids (PDOs) have emerged as a promising model system. PDOs are three-dimensional cultures grown from tumor cells, maintaining the genetic and phenotypic characteristics of the patient’s tumor. In the case of high-grade serous ovarian carcinoma (HGSOC), transcriptomics can reveal changes in gene expression that occur during culture and treatment, providing potential targets for precision medicine [Chen H., et al., 2020; Nero C., et al., 2021; Maenhoudt N., et al., 2020]. 
+
+**Dataset Context:** The dataset focuses on RNA sequencing of PDOs derived from malignant effusions of HGSOC patients. These effusions are fluid accumulations that often contain chemotherapy-resistant multicellular spheroids. By studying gene expression changes at two time points (Day 0 and Day 6 of short-term culture), we aim to uncover adaptive mechanisms of the tumour cells, transitioning from in vivo environments to ex vivo conditions as well as potential biomarkers for drug resistance. Previous studies, such as Chen H., et al. (2020), have shown that short-term organoid cultures from HGSOC malignant effusions exhibit upregulation of proliferation-related genes, epithelial-mesenchymal transition (EMT) markers, and KRAS signaling pathways, providing insights into drug resistance mechanisms [Chen H., et al., 2020].
+
+### **2. Research Question and Hypothesis**
+
+How does the gene expression profile change between Day 0 and Day 6 in HGSOC organoids?
+
+-   **Hypothesis:** Transcriptomic profiles at Day 6 will show significant changes in stress response and metabolic pathways due to culture conditions.
+-   **Prediction:** Genes associated with cell survival, proliferation, and metabolism will be upregulated.
+
+### **3. Data Description**
+
+#### **3.1 Dataset Overview**
+
+The dataset consists of RNA-seq read counts from four HGSOC patient-derived organoids, with samples collected at two time points (Day 0 and Day 6). Each file includes three columns: Ensembl gene IDs, gene names, and RNA-seq read counts.
+
+**Files Provided:**
+
+-   A778_D0.tsv, A778_D6.tsv
+-   A820_D0.tsv, A820_D6.tsv
+-   A870_D0.tsv, A870_D6.tsv
+-   A899_D0.tsv, A899_D6.tsv
+
+#### **3.2 Data Wrangling and Exploratory Code**
+
+**Data Preprocessing Steps:** 
+
+-   Loaded the data using tidyverse’s readr package.
+-   Checked for missing values.
+-   Normalized read counts using the DESeq2 package.
+-   Filtered low-expression, outlier genes, and ambiguous reads to improve statistical power.
+-   Merged samples from the same patient for comparative analysis.
+
+**Data Characteristics:**
+
+-   Each file contains 58,725 rows representing genes and three columns.
+-   Gene expression varies between Day 0 and Day 6, reflecting biological changes during culture.
+
+```{r data_processing, message=FALSE, warning=FALSE}
+# Load required libraries
+# List of required packages
+required_packages <- c("tidyverse", "ggplot2", "DESeq2", "pheatmap", "RColorBrewer",
+                       "clusterProfiler", "org.Hs.eg.db", "biomaRt", "knitr", "kableExtra")
+
+# Function to check and install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg, dependencies = TRUE)
+    message(paste("Installed:", pkg))
+  } else {
+    message(paste("Already installed:", pkg))
+  }
+  return(invisible(NULL))  # Prevents NULL output in sapply
+}
+
+# Apply function to check and install packages
+invisible(sapply(required_packages, install_if_missing))
+library(tidyverse)
+library(ggplot2)
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(biomaRt)
+library(knitr)
+library(kableExtra)
+
+# Update file paths as needed
+file_paths <- list.files(path = "1_CancerTranscriptomics/read_counts", 
+                         pattern = "*.tsv", full.names = TRUE)
+data_list <- lapply(file_paths, function(file) {
+  read_tsv(file, col_names = c("Ensembl_ID", "Gene_Name", "Read_Counts"))
+})
+
+# Assigns names to datasets for clarity
+names(data_list) <- c("A778_D0", "A778_D6", "A820_D0", "A820_D6", 
+                      "A870_D0", "A870_D6", "A899_D0", "A899_D6")
+
+## Inspecting the data ##
+
+# View structure and sample content of one file
+str(data_list[[1]])
+head(data_list[[1]])
+lapply(data_list, dim) # Loops dim to check the individual files' dimensions
+
+# Adding sample and timepoint metadata
+for (i in seq_along(data_list)) {
+  sample_info <- str_split(names(data_list)[i], "_", simplify = TRUE) 
+  # takes the sample name and timepoint and splits them
+  data_list[[i]] <- data_list[[i]] %>%
+    mutate(Sample = sample_info[1],
+           Time = sample_info[2])
+}
+```
+
+```{r data_summary, message=FALSE, warning=FALSE}
+## Combining the 8 files into 1 merged dataset ##
+merged_data <- bind_rows(data_list)
+head(merged_data)
+
+# Summary of read counts
+str(merged_data)
+
+# Remove unwanted ambiguous rows
+cleaned_data <- merged_data %>%
+  filter(!grepl("^_", Ensembl_ID))  
+
+# Check results
+head(cleaned_data)
+
+# Check for missing or zero values
+summary(cleaned_data$Read_Counts)
+table(cleaned_data$Read_Counts == 0)  # Count zero values
+
+# Inspect the range of Read_Counts
+range(cleaned_data$Read_Counts, na.rm = TRUE)
+quantile(cleaned_data$Read_Counts, probs = seq(0, 1, 0.05), na.rm = TRUE) 
+
+# Check summary after initial filtering
+summary(cleaned_data$Read_Counts)
+```
+
+This initial exploration helped in deciding appropriate filtering thresholds before applying DESeq2 normalization, as well as further visualization of the data. This allowed us to understand the structure further, as well as detect potential issues that have to be processed. This initial step will ensure that downstream differential expression analysis produces biologically meaningful results while mitigating bias introduced by outliers or technical artifacts.
+
+**Exploratory Analysis:**
+
+-   Summary statistics of read counts (mean, median, range).
+-   Histogram and boxplot visualizations to check the distribution of the values.
+-   PCA analysis was used to visualize and explore the data structure of the high-dimensional dataset to identify potential relationships, batch effects and any outliers.
+-   Initial DESeq2 processing, including normalization and creation of a DESeqDataset for further downstream analyses.
+
+The data processing steps produced the following plots that help illustrate the data structure for better understanding and planning of the subsequent downstream analyses planned:
+
+-   **Filtered Read Count Distribution:** This histogram shows the raw read count distribution after filtering. The highly skewed nature of the counts, with most values close to zero, indicates that raw read counts exhibit extreme variability and require transformation for proper downstream analysis.
+-   **Log-Transformed Read Count Distribution:** Applying a log10 transformation normalizes the read count distribution, reducing the impact of extreme values and making the data more interpretable. The transformation reveals a more symmetric distribution, improving the applicability of statistical analyses such as differential expression testing.
+-   **Boxplot of Read Count Distributions Per Sample:** This boxplot visualizes the read count spread across samples. The presence of outliers and high dispersion indicates inherent variability in gene expression across conditions and samples. The transformation helps mitigate these differences, making the dataset suitable for comparative analysis.
+
+```{r data_visualization, message=FALSE, warning=FALSE}
+## Visualization and additional filtering ##
+
+# Threshold for low and high count reads
+low_threshold <- 5 
+
+# Remove lowly expressed genes (≤5 reads)
+filtered_data <- cleaned_data %>% filter(Read_Counts > low_threshold)
+
+# Check how many genes remain
+cat("Number of genes after filtering low counts:", nrow(filtered_data), "\n")
+
+# Check new summary statistics
+summary(filtered_data$Read_Counts)
+
+ggplot(filtered_data, aes(x = Read_Counts)) +
+  geom_histogram(binwidth = 50, fill = "blue") +
+  theme_minimal() +
+  labs(title = "Filtered Read Count Distribution",
+       x = "Read Counts",
+       y = "Frequency")
+
+ggplot(filtered_data, aes(x = log10(Read_Counts + 1))) +
+  geom_histogram(binwidth = 0.1, fill = "blue") +
+  theme_minimal() +
+  labs(title = "Log-Transformed Read Count Distribution",
+       x = "Log10(Read Counts + 1)",
+       y = "Frequency")
+
+ggplot(filtered_data, aes(y = Read_Counts)) +
+  geom_boxplot(fill = "skyblue") +
+  theme_minimal() +
+  labs(title = "Boxplot of Read Count Distributions Per Sample",
+       x = "Sample",
+       y = "Read Counts") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+```{r data_deseq2, message=FALSE, warning=FALSE}
+
+## DESeq2 Workflow ##
+
+count_matrix <- filtered_data %>%
+  unite(Sample_ID, Sample, Time, sep = "_") %>%  
+  dplyr::select(Ensembl_ID, Sample_ID, Read_Counts) %>%  
+  pivot_wider(names_from = Sample_ID, 
+              values_from = Read_Counts, 
+              values_fill = 0) %>%
+  column_to_rownames(var = "Ensembl_ID") %>%
+  as.matrix()
+
+dim(count_matrix)  # (genes x samples) (58,726 × 8)
+colnames(count_matrix)  # Checks if sample names match
+
+sample_info <- data.frame(
+  Sample_ID = colnames(count_matrix),
+  Condition = ifelse(grepl("_D0$", colnames(count_matrix)), "Day0", "Day6")  
+  )
+
+rownames(sample_info) <- sample_info$Sample_ID  
+# Ensure row names match count_matrix
+
+dds <- DESeqDataSetFromMatrix(
+  countData = count_matrix,
+  colData = sample_info,
+  design = ~ Condition
+)
+
+dds <- dds[rowSums(counts(dds)) > low_threshold, ]
+
+dds_out <- DESeq(dds)
+
+resultsNames(dds)  # Should return "Condition_Day6_vs_Day0"
+
+res <- results(dds_out)
+
+# Perform PCA on transposed normalized counts
+rlog_counts <- rlog(dds)
+pca_data <- prcomp(t(assay(rlog_counts)))
+
+# Convert PCA results into a dataframe
+pca_df <- as.data.frame(pca_data$x)  # Extract PCA coordinates
+pca_df$Sample <- rownames(pca_df)  
+
+# Merge PCA results with sample metadata
+pca_df <- left_join(pca_df, sample_info, by = c("Sample" = "Sample_ID"))
+
+# Plot PCA using ggplot2
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Condition, label = Sample)) +
+  geom_point(size = 4, alpha = 0.8) +  # Add points
+  geom_text(vjust = -1) +  # Add sample labels
+  theme_minimal() +
+  labs(title = "PCA Plot of RNA-seq Samples",
+       x = paste0("PC1 (", round(100 * summary(pca_data)$importance[2,1], 1),
+                  "% Variance)"),
+       y = paste0("PC2 (", round(100 * summary(pca_data)$importance[2,2], 1),
+                  "% Variance)"))
+```
+
+The **PCA plot** revealed clustering primarily by patient rather than by time point. This suggests that inter-patient variability plays a significant role in gene expression patterns, potentially overshadowing the effect of short-term culture conditions. Although we observed separation along PC1, indicating some transcriptomic shifts between Day 0 and Day 6, the clustering by patient highlights inherent biological differences between organoid models derived from different individuals. This finding may suggest that patient-specific factors, such as genetic background or prior treatment history, could be influencing gene expression changes during short-term culture. Further analysis should involve investigating into whether specific gene sets drive these patient-specific variations.
+
+### **4. Approach to Answering Research Questions**
+
+#### **Steps and Methodology:**
+
+1.  **Preprocessing:**
+    -   Normalized raw read counts using a method like DESeq2 median-ratio and rlog transformation after filtering low-expressed genes.
+2.  **Differential Expression Analysis:**
+    -   Compared Day 0 and Day 6 samples for significantly up- or downregulated genes using DESeq2.
+
+    -   Identified significant genes potentially related to cell survival, proliferation and metabolism to assess stress response.
+
+    -   GO/KEGG Enrichment was conducted for pathway identification
+3.  **Visualization and Interpretation:**
+    -   Generated heatmaps for visualizing patterns of gene expression changes across samples.
+
+    -   Included volcano plots to identify differentially expressed genes across the samples
+
+    -   Dot plots were generated to illustrate the the results of the GO/KEGG pathway enrichment
+
+### **5. Anticipated Roadblocks and Solutions**
+
+**High Variability in Gene Expression Across Samples:**
+
+Individual patient samples may exhibit variability due to differences in tumor microenvironment, genetic background, or prior treatment history.
+
+-   Solutions:
+    -   We can apply **log-transformation (log2(counts +1))** before visualization to quickly check.
+    -   Can also use **DESeq2 normalization** to account for sequencing depth differences.
+    -   Filtering out **lowly expressed genes** to improve statistical power.
+
+**Batch Effects & Technical Variability:**
+
+Samples from different patients may have batch effects due to variations in sequencing runs or sample preparation.
+
+-   Solutions:
+    -   To solve this, we can perform **PCA analysis** to identify batch effects.
+
+    -   We can also use **Combat-Seq** (sva) or **RemoveBatchEffect** (limma) if needed, for preservation of biological differences and when handling log-transformed expression values.
+
+**Small Sample Size & Low Statistical Power**
+
+Given that we only have 4 sets of patient-derived organoids, with 8 samples overall, the statistical power for detecting differentially expressed genes may be somewhat low, leading to high false discovery rates or a failure to detect more subtle, yet biologically relevant changes that would otherwise be seen in a larger dataset.
+
+-   Solutions:
+    -   In an effort to solve this, paired differential expression may be used to account for individual differences in the data and increase statistical power
+
+    -   Gene Set Enrichment Analysis can also be conducted to aggregate data into gene sets, rather than focusing on individual genes.
+
+**Difficulty in Detecting Chemotherapy Resistance Markers**
+
+One of the most common use cases of HGSOCs are for identifying chemotherapy resistance markers in patients. However, these mechanisms, like that with stress response and cell survival, typically involve multiple genes working in conjunction as well as pathways. As such, transient changes in stress response genes may not reflect long-term chemotherapy resistance.
+
+-   Solutions:
+    -   Usage of pathway-level analysis instead of focusing on individual genes or markers.
+
+    -   Comparison of the results with public HGSOC datasets from The Cancer Genome Atlas (TCGA) and Gene Expression Omnibus (GEO), as these are likely to have larger patient cohorts and thus viable for benchmarking purposes.
+
+### **6. Differential Expression Analysis Results**
+
+### **6.1 Volcano Plot Analysis**
+
+The volcano plot (Figure 1) visualizes differentially expressed genes between Day 0 and Day 6. Genes with an adjusted p-value (padj) \< 0.05 were considered statistically significant. Genes with a log2 fold change (log2FC) \> 1 were categorized as upregulated, whereas those with log2FC \< -1 were downregulated.
+
+```{r data_diffexp, message=FALSE, warning=FALSE}
+
+# ============================
+# Step 1: Load and Wrangle Data
+# ============================
+
+# Define directory path containing the dataset
+read_counts_dir <- "1_CancerTranscriptomics/read_counts"
+
+# Define file paths
+file_paths <- list.files(path = read_counts_dir, pattern = "*.tsv", full.names = TRUE)
+
+# Extract sample names from file names
+file_names <- list.files(path = read_counts_dir, pattern = "*.tsv", full.names = FALSE)
+sample_names <- tools::file_path_sans_ext(file_names)
+
+# Load datasets and assign sample names
+data_list <- setNames(lapply(seq_along(file_paths), function(i) {
+  read_tsv(file_paths[i], col_names = c("Ensembl_ID", "Gene_Name", "Read_Counts")) %>%
+    mutate(Sample = sample_names[i])
+}), sample_names)
+
+# Merge datasets into a single dataframe
+merged_data <- bind_rows(data_list)
+
+# Check loaded data
+print(dim(merged_data))  # Rows x Columns
+print(head(merged_data))  # Preview first few rows
+print(unique(merged_data$Sample))  # Ensure sample names are correct
+
+# ============================
+# Step 2: Prepare Data for DESeq2
+# ============================
+
+# Create sample information metadata
+sample_info <- data.frame(
+  Sample = unique(merged_data$Sample),
+  condition = ifelse(grepl("_D0", unique(merged_data$Sample)), "D0", "D6")
+)
+rownames(sample_info) <- sample_info$Sample
+
+# Transform data into count matrix
+count_matrix <- merged_data %>%
+  dplyr::select(Ensembl_ID, Sample, Read_Counts) %>%
+  pivot_wider(names_from = Sample, values_from = Read_Counts, values_fill = list(Read_Counts = 0)) %>%
+  column_to_rownames(var = "Ensembl_ID")
+
+# Convert to numeric matrix
+count_matrix <- as.matrix(count_matrix)
+
+# Check matrix format
+print(dim(count_matrix))  # Genes x Samples
+print(head(rownames(count_matrix), 10))  # Should return Ensembl IDs
+
+# ============================
+# Step 3: Differential Expression Analysis
+# ============================
+
+# Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(countData = count_matrix, colData = sample_info, design = ~ condition)
+
+# Set reference condition
+dds$condition <- relevel(dds$condition, ref = "D0")
+
+# Run DESeq2 normalization & analysis
+dds_out <- DESeq(dds)
+res <- results(dds_out, alpha = 0.05)
+summary(res)
+
+# Convert results to a dataframe
+res_df <- as.data.frame(res)
+res_df$gene <- rownames(res_df)
+
+# Remove NA values
+res_df <- res_df %>% drop_na(log2FoldChange, padj)
+
+# ============================
+# Step 4: Visualization
+# ============================
+
+## Volcano Plot
+res_df$Significance <- "Not Significant"
+res_df$Significance[res_df$padj < 0.05 & res_df$log2FoldChange > 1] <- "Upregulated"
+res_df$Significance[res_df$padj < 0.05 & res_df$log2FoldChange < -1] <- "Downregulated"
+
+ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = Significance)) +
+  geom_point(alpha = 0.6) +
+  scale_colour_brewer(palette = "Set1") +
+  labs(title = "Volcano Plot of Differentially Expressed Genes",
+       x = "Log2 Fold Change",
+       y = "-Log10 Adjusted p-value") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+```
+
+Figure 1. **Volcano Plot of Differentially Expressed Genes.** This figure highlights significantly upregulated (green) and downregulated (red) genes, while non-significant genes remain blue. The analysis reveals a notable number of differentially expressed genes, supporting the hypothesis that gene expression shifts significantly over the 6-day culture period.
+
+### **6.2 Heatmap of Top Differentially Expressed Genes**
+
+A heatmap (Figure 2) was generated using the top 30 differentially expressed genes (DEGs). Expression values were normalized using variance stabilizing transformation (VST) from DESeq2 to minimize technical variation and enhance biological signal clarity.
+
+```{r data_heatmap, message=FALSE, warning=FALSE}
+
+### Heatmap
+
+# Extract top 30 significant genes (removing NAs first)
+filtered_res_df <- res_df %>% drop_na(padj)
+top_genes <- rownames(filtered_res_df[order(filtered_res_df$padj), ])[1:min(30, nrow(filtered_res_df))]
+
+# Ensure the selected genes exist in the dataset
+if (exists("dds_out")) {
+  vst_data <- vst(dds_out, blind = FALSE)  # Precompute VST data to avoid redundant calls
+  top_genes <- top_genes[!is.na(top_genes) & top_genes %in% rownames(vst_data)]
+}
+
+if (length(top_genes) > 0) {
+  norm_counts <- assay(vst_data)[top_genes, ]
+  
+  # Replace Ensembl ID with Gene Name, fallback to ID if NA
+  gene_names <- merged_data$Gene_Name[match(top_genes, merged_data$Ensembl_ID)]
+  rownames(norm_counts) <- ifelse(is.na(gene_names), top_genes, gene_names)
+  
+  # Fix sample names by removing "_gene"
+  colnames(norm_counts) <- gsub("_gene", "", colnames(norm_counts))  
+  
+  pheatmap(norm_counts,
+           scale = "row",
+           clustering_distance_rows = "euclidean",
+           clustering_distance_cols = "euclidean",
+           clustering_method = "complete",
+           main = "Heatmap of Top 30 DEGs",
+           fontsize_row = 8,   
+           fontsize_col = 10,   
+           angle_col = 45)
+} else {
+  print("No significant genes found for heatmap.")
+}
+
+```
+
+Figure 2. Heatmap of Top 30 Differentially Expressed Genes Hierarchical clustering reveals distinct expression patterns between Day 0 and Day 6, with several genes showing marked upregulation or downregulation. Genes such as CYP1A1 and CHGA exhibit strong differential expression, suggesting their involvement in adaptive cellular responses.
+
+### **6.3 Summary Table of Top Differentially Expressed Genes**
+
+The table below lists the top 10 upregulated and 10 downregulated genes ranked by log2FC.
+
+**Table 1.** Top Differentially Expressed Genes
+
+```{r data_degtable, message=FALSE, warning=FALSE}
+
+# ============================
+# Step 5: Table of Top DEGs
+# ============================
+
+library(kableExtra)
+
+# Select top 10 upregulated and downregulated genes using head()
+top_up <- res_df %>% filter(padj < 0.05) %>% arrange(desc(log2FoldChange)) %>% head(10)
+top_down <- res_df %>% filter(padj < 0.05) %>% arrange(log2FoldChange) %>% head(10)
+top_genes_table <- bind_rows(top_up, top_down) %>%
+  dplyr::select(gene, log2FoldChange, padj)
+
+# Replace Ensembl IDs with Gene Names, ensuring no NA mismatches
+top_genes_table$gene <- merged_data$Gene_Name[match(top_genes_table$gene, merged_data$Ensembl_ID)]
+top_genes_table$gene[is.na(top_genes_table$gene)] <- top_genes_table$gene[is.na(top_genes_table$gene)]
+
+# Save as CSV
+write.csv(top_genes_table, "Top_20_DEGs.csv", row.names = FALSE)
+
+# Display table using kableExtra with APA formatting
+knitr::kable(top_genes_table, 
+             caption = "Table 1. \n Top 20 Differentially Expressed Genes",
+             col.names = c("Gene Name", "Log2 Fold Change", "Adjusted P-Value"), 
+             format = "html") %>%
+  kable_styling(full_width = FALSE, 
+                position = "center", 
+                bootstrap_options = c("striped", "hover")) %>%
+  add_footnote("Note. Genes shown are the top differentially expressed genes based on log2 fold change and adjusted p-values. Adjusted p-values (padj) < 0.05 indicate statistical significance.", 
+               notation = "none")
+
+
+```
+
+This table highlights key genes with the most substantial changes in expression levels, which may be relevant to pathways involved in stress response, metabolic adaptation, and cellular proliferation.
+
+### **6.4 Functional Enrichment Analysis**
+
+Gene Ontology (GO) and Kyoto Encyclopedia of Genes and Genomes (KEGG) enrichment analyses were conducted to identify biological processes and pathways associated with differentially expressed genes.
+
+```{r data_goenrich, message=FALSE, warning=FALSE}
+
+# ============================
+# Step 6: GO/KEGG Enrichment for Pathway Identification
+# ============================
+
+# Remove version numbers from Ensembl IDs
+top_genes <- unique(res_df %>% filter(padj < 0.05) %>% pull(gene))
+top_genes_clean <- gsub("\\..*", "", top_genes)  
+
+# Convert Ensembl IDs to Entrez IDs
+gene_ids <- mapIds(org.Hs.eg.db, 
+                   keys = top_genes_clean, 
+                   column = "ENTREZID", 
+                   keytype = "ENSEMBL", 
+                   multiVals = "first")
+
+# If mapping fails, try biomaRt
+if (sum(is.na(gene_ids)) > length(gene_ids) * 0.5) { 
+  message("⚠ Many genes failed to map. Using biomaRt...")
+  
+  mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  converted <- getBM(attributes = c("ensembl_gene_id", "entrezgene_id"),
+                     filters = "ensembl_gene_id",
+                     values = top_genes_clean,
+                     mart = mart)
+  
+  gene_ids <- setNames(converted$entrezgene_id, converted$ensembl_gene_id)
+}
+
+# Remove NA values
+gene_ids <- na.omit(gene_ids)
+
+# Perform GO enrichment
+go_results <- enrichGO(
+  gene          = gene_ids, 
+  OrgDb         = org.Hs.eg.db, 
+  keyType       = "ENTREZID", 
+  ont           = "BP",  # Biological Process 
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.05
+)
+
+# Print summary
+print(head(go_results))
+
+# Save results
+write.csv(as.data.frame(go_results), "GO_Enrichment_Results.csv", row.names = FALSE)
+
+# Plot Top 10 GO Terms
+if (nrow(as.data.frame(go_results)) > 0) {
+  dotplot(go_results, showCategory = 10, title = "Top 10 GO Enriched Biological Processes")
+} else {
+  message("⚠ No significant GO terms found.")
+}
+```
+
+Figure 3. **Top 10 GO Enriched Biological Processes.** The GO analysis indicates significant enrichment in processes such as chemotaxis, extracellular matrix organization, and granulocyte migration. These findings suggest an active reorganization of cellular structure and immune-related responses in the cultured organoids.
+
+```{r data_keggenrich, message=FALSE, warning=FALSE}
+# Perform KEGG pathway enrichment
+kegg_results <- enrichKEGG(
+  gene          = gene_ids, 
+  organism      = "hsa",  # Human
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.05
+)
+
+# Print summary
+print(head(kegg_results))
+
+# Save results
+write.csv(as.data.frame(kegg_results), "KEGG_Enrichment_Results.csv", row.names = FALSE)
+
+# Plot Top 10 KEGG Pathways
+if (nrow(as.data.frame(kegg_results)) > 0) {
+  dotplot(kegg_results, showCategory = 10, title = "Top 10 Enriched KEGG Pathways")
+} else {
+  message("⚠ No significant KEGG pathways found.")
+}
+
+```
+
+Figure 4. **Top 10 KEGG Pathways.** The KEGG enrichment analysis identifies critical pathways, including IL-17 and PPAR signaling, which are known to be involved in inflammatory responses and lipid metabolism.
+
+### **6.5 Interpretation of Findings**
+
+The analysis strongly supports the hypothesis that transcriptomic profiles at Day 6 reflect significant changes in stress response and metabolic pathways. The upregulation of genes related to immune responses (FOSB, CHGA) and metabolic shifts (CYP1A1, SCD) aligns with previous literature, suggesting an adaptation to ex vivo conditions (Roussos et al., 2011; Walker et al., 2018; Giese et al., 2019). Furthermore, enrichment analysis highlights potential mechanisms related to tumor survival and drug resistance, particularly through the IL-17 signaling pathway, which has been implicated in inflammation-driven cancer progression (Kawasaki & Yokomizo, 2018; Zhang et al., 2021).
+
+### **7. Summary of Current Draft Poster Visualizations**
+
+For the draft poster presentation, we will include:
+
+1.  Volcano Plot (Figure 1) to visualize the significant differentially expressed genes.
+
+2.  Heatmap (Figure 2) to illustrate clustering and expression patterns of key genes.
+
+3.  Table of Top 20 DEGS (Table 1) for concise representation of the most relevant findings.
+
+4.  GO and KEGG Dot Plots (Figures 3 & 4) to contextualize any significant pathways found from the analyses.
+
+These visualizations can effectively summarize key findings, making them ideal for presentation in a scientific setting in a poster format. Moreover, additional visualizations may also be further added in case of new analyses or findings prior to the submission of the final poster.
+
+### **8. References**
+
+1.  Chen H., Gotimer K., De Souza C., Tepper CG., Karnezis AN., Leiserowitz GS., Chien J., Smith LH. (2020). Short-term organoid culture for drug sensitivity testing of high-grade serous carcinoma. Gynecol Oncol. 157(3):783-792. doi: 10.1016/j.ygyno.2020.03.026.
+
+2.  Nero C., Vizzielli G., Lorusso D., Cesari E., Daniele G., Loverro M., Scambia G., Sette C. (2021). Patient-derived organoids and high grade serous ovarian cancer: from disease modeling to personalized medicine. J Exp Clin Cancer Res. 40(1):116. doi: 10.1186/s13046-021-01917-7.
+
+3.  Maenhoudt N., Defraye C., Boretto M., Jan Z., Heremans R., Boeckx B., Hermans F., Arijs I., Cox B., Van Nieuwenhuysen E., Vergote I., Van Rompuy AS., Lambrechts D., Timmerman D., Vankelecom H. (2020). Developing Organoids from Ovarian Cancer as Experimental and Preclinical Models. Stem Cell Reports. 14(4):717-729. doi: 10.1016/j.stemcr.2020.03.004.
+
+4.  Roussos, E. T., Condeelis, J. S., & Patsialou, A. (2011). Chemotaxis in cancer. Nature Reviews Cancer, 11(8), 573–587. <https://doi.org/10.1038/nrc3078>
+
+5.  Walker, C., Mojares, E., & Del Río Hernández, A. (2018). Role of extracellular matrix in development and cancer progression. International Journal of Molecular Sciences, 19(10), 3028. <https://doi.org/10.3390/ijms19103028>
+
+6.  Giese, M. A., Hind, L. E., & Huttenlocher, A. (2019). Neutrophil plasticity in the tumor microenvironment. Blood, 133(20), 2159–2167. <https://doi.org/10.1182/blood.2019000347>
+
+7.  Kawasaki, Y., & Yokomizo, T. (2018). The role of leukotriene B4 receptors in inflammatory diseases. Allergology International, 67(2), 186–190. <https://doi.org/10.1016/j.alit.2017.11.002>
+
+8.  Zhang, X., Zhang, Y., He, Z., Yin, K., Li, B., Zhang, L., & Xu, Y. (2021). IL-17 promotes ovarian cancer progression by upregulating PD-L1 expression via STAT3 pathway activation. Frontiers in Oncology, 11, 719312. <https://doi.org/10.3389/fonc.2021.719312>

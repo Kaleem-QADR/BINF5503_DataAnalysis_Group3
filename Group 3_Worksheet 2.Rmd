@@ -603,7 +603,9 @@ Figure 4. **Top 10 KEGG Pathways.** The KEGG enrichment analysis identifies crit
 
 ### **6.5 Interpretation of Findings**
 
-The analysis strongly supports the hypothesis that transcriptomic profiles at Day 6 reflect significant changes in stress response and metabolic pathways. The upregulation of genes related to immune responses (FOSB, CHGA) and metabolic shifts (CYP1A1, SCD) aligns with previous literature, suggesting an adaptation to ex vivo conditions (Roussos et al., 2011; Walker et al., 2018; Giese et al., 2019). Furthermore, enrichment analysis highlights potential mechanisms related to tumor survival and drug resistance, particularly through the IL-17 signaling pathway, which has been implicated in inflammation-driven cancer progression (Kawasaki & Yokomizo, 2018; Zhang et al., 2021).
+The differential expression analysis strongly supports the hypothesis that transcriptomic profiles at Day 6 reflect significant changes in stress response and metabolic pathways. The upregulation of genes related to immune responses (FOSB, CHGA) and metabolic shifts (CYP1A1, SCD) aligns with previous literature, suggesting an adaptation to ex vivo conditions. The increase in immune-related gene expression may indicate an inflammatory or stress-induced response due to the transition from an in vivo environment to a culture system.
+
+Moreover, the enrichment analysis results highlighted potential mechanisms related to tumor survival and drug resistance. One example was the activation of pathways related to chemotaxis and extracellular matrix reorganization which has been well-documented in cancer progression (Roussos et al., 2011; Walker et al., 2018; Giese et al., 2019). The identification of IL-17 signaling pathway activation also suggests that inflammatory processes may be contributing to cellular adaptation and survival, a phenomenon commonly observed in therapy-resistant cancers. This aligns with previous findings indicating that IL-17 upregulation enhances immune signaling and cancer cell plasticity, potentially promoting therapy resistance (Aotsuka et al., 2019). Metabolic reprogramming, as indicated by the differential expression of CYP1A1 and SCD, could be a cellular strategy to cope with new environmental conditions, further supporting the idea that PDOs undergo rapid functional changes in culture.
 
 ### **7. Summary of Current Draft Poster Visualizations**
 
@@ -633,6 +635,4 @@ These visualizations can effectively summarize key findings, making them ideal f
 
 6.  Giese, M. A., Hind, L. E., & Huttenlocher, A. (2019). Neutrophil plasticity in the tumor microenvironment. Blood, 133(20), 2159–2167. <https://doi.org/10.1182/blood.2019000347>
 
-7.  Kawasaki, Y., & Yokomizo, T. (2018). The role of leukotriene B4 receptors in inflammatory diseases. Allergology International, 67(2), 186–190. <https://doi.org/10.1016/j.alit.2017.11.002>
-
-8.  Zhang, X., Zhang, Y., He, Z., Yin, K., Li, B., Zhang, L., & Xu, Y. (2021). IL-17 promotes ovarian cancer progression by upregulating PD-L1 expression via STAT3 pathway activation. Frontiers in Oncology, 11, 719312. <https://doi.org/10.3389/fonc.2021.719312>
+7.  Aotsuka, A., Matsumoto, Y., Arimoto, T., Kawata, A., Ogishima, J., Taguchi, A., ... & Fujii, T. (2019). Interleukin‐17 is associated with expression of programmed cell death 1 ligand 1 in ovarian carcinoma. Cancer Science, 110(10), 3068-3078.

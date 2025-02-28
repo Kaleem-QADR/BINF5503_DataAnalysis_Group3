@@ -2,7 +2,7 @@
 
 ## Authors
 
-Daniel Esguerra, Reethigha Uruthiran, Siddhi Naik, Kaleem Uddin Mohammed,
+Daniel Esguerra, Reethigha Uruthiran, Siddhi Naik, Kaleem Uddin Mohammed
 
 ## 1. Introduction
 

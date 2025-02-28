@@ -96,7 +96,7 @@ ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = Significance)) 
        x = "Log2 Fold Change",
        y = "-Log10 Adjusted p-value") +
   theme_minimal() +
-  theme(plot.title = element_text(size = 14, face = "bold"))
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
 ## Heatmap
 
@@ -128,7 +128,7 @@ if (length(top_genes) > 0) {
            clustering_distance_cols = "euclidean",
            clustering_method = "complete",
            main = "Heatmap of Top 30 DEGs",
-           fontsize_row = 9,   
+           fontsize_row = 8,   
            fontsize_col = 10,   
            angle_col = 45)
 } else {

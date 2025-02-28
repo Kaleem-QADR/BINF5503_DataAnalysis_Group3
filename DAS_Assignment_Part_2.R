@@ -4,6 +4,7 @@
 library(tidyverse)
 library(DESeq2)
 library(pheatmap)
+library(RColorBrewer)
 
 # ============================
 # Step 1: Load and Wrangle Data
@@ -90,7 +91,7 @@ res_df$Significance[res_df$padj < 0.05 & res_df$log2FoldChange < -1] <- "Downreg
 
 ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = Significance)) +
   geom_point(alpha = 0.6) +
-  scale_color_manual(values = c("blue", "grey", "red")) +
+  scale_colour_brewer(palette = "Set1") +
   labs(title = "Volcano Plot of Differentially Expressed Genes",
        x = "Log2 Fold Change",
        y = "-Log10 Adjusted p-value") +
@@ -127,7 +128,9 @@ if (length(top_genes) > 0) {
            clustering_distance_cols = "euclidean",
            clustering_method = "complete",
            main = "Heatmap of Top 30 DEGs",
-           fontsize_row = 8)
+           fontsize_row = 9,   
+           fontsize_col = 10,   
+           angle_col = 45)
 } else {
   print("No significant genes found for heatmap.")
 }

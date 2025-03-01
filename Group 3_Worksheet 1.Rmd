@@ -1,0 +1,347 @@
+---
+title: "Worksheet 1"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: false
+    keep_tex: true
+always_allow_html: true
+geometry: margin=1in  
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE, comment = NA, width = 70)
+knitr::opts_chunk$set(results = "hold")
+options(width = 70) # Adjust console width
+```
+
+## Cancer Transcriptomics Dataset Analysis
+
+Authors: Daniel Esguerra, Kaleemuddin Mohammed, Reethigha Uruthiran, Siddhi Naik
+
+### **1. Introduction**
+
+**Field Overview:** The dataset originates from the field of cancer transcriptomics, a branch of molecular biology that studies gene expression through RNA sequencing (RNA-seq) in cancer cells. Transcriptomics provides insight into how genes are regulated in various conditions, such as disease progression or drug response.
+
+In cancer research, patient-derived organoids (PDOs) have emerged as a promising model system. PDOs are three-dimensional cultures grown from tumor cells, maintaining the genetic and phenotypic characteristics of the patient’s tumor. In the case of high-grade serous ovarian carcinoma (HGSOC), transcriptomics can reveal changes in gene expression that occur during culture and treatment, providing potential targets for precision medicine [Chen H., et al., 2020; Nero C., et al., 2021; Maenhoudt N., et al., 2020]. 
+
+**Dataset Context:** The dataset focuses on RNA sequencing of PDOs derived from malignant effusions of HGSOC patients. These effusions are fluid accumulations that often contain chemotherapy-resistant multicellular spheroids. By studying gene expression changes at two time points (Day 0 and Day 6 of short-term culture), we aim to uncover adaptive mechanisms of the tumour cells, transitioning from in vivo environments to ex vivo conditions as well as potential biomarkers for drug resistance. Previous studies, such as Chen H., et al. (2020), have shown that short-term organoid cultures from HGSOC malignant effusions exhibit upregulation of proliferation-related genes, epithelial-mesenchymal transition (EMT) markers, and KRAS signaling pathways, providing insights into drug resistance mechanisms [Chen H., et al., 2020].
+
+### **2. Research Question and Hypothesis**
+
+How does the gene expression profile change between Day 0 and Day 6 in HGSOC organoids?
+
+-   **Hypothesis:** Transcriptomic profiles at Day 6 will show significant changes in stress response and metabolic pathways due to culture conditions.
+-   **Prediction:** Genes associated with cell survival, proliferation, and metabolism will be upregulated.
+
+### **3. Data Description**
+
+#### **3.1 Dataset Overview**
+
+The dataset consists of RNA-seq read counts from four HGSOC patient-derived organoids, with samples collected at two time points (Day 0 and Day 6). Each file includes three columns: Ensembl gene IDs, gene names, and RNA-seq read counts.
+
+**Files Provided:**
+
+-   A778_D0.tsv, A778_D6.tsv
+-   A820_D0.tsv, A820_D6.tsv
+-   A870_D0.tsv, A870_D6.tsv
+-   A899_D0.tsv, A899_D6.tsv
+
+#### **3.2 Data Wrangling and Exploratory Code**
+
+**Data Preprocessing Steps:** 
+
+-   Loaded the data using tidyverse’s readr package.
+-   Checked for missing values.
+-   Normalized read counts using the DESeq2 package.
+-   Filtered low-expression, outlier genes, and ambiguous reads to improve statistical power.
+-   Merged samples from the same patient for comparative analysis.
+
+**Data Characteristics:**
+
+-   Each file contains 58,725 rows representing genes and three columns.
+-   Gene expression varies between Day 0 and Day 6, reflecting biological changes during culture.
+
+```{r data_processing, message=FALSE, warning=FALSE}
+# Load required libraries
+# List of required packages
+required_packages <- c("tidyverse", "ggplot2", "DESeq2")
+
+# Function to check and install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg, dependencies = TRUE)
+    message(paste("Installed:", pkg))
+  } else {
+    message(paste("Already installed:", pkg))
+  }
+  return(invisible(NULL))  # Prevents NULL output in sapply
+}
+
+# Apply function to check and install packages
+invisible(sapply(required_packages, install_if_missing))
+library(tidyverse)
+library(ggplot2)
+library(DESeq2)
+
+
+# Update file paths as needed
+file_paths <- list.files(path = "1_CancerTranscriptomics/read_counts", 
+                         pattern = "*.tsv", full.names = TRUE)
+data_list <- lapply(file_paths, function(file) {
+  read_tsv(file, col_names = c("Ensembl_ID", "Gene_Name", "Read_Counts"))
+})
+
+# Assigns names to datasets for clarity
+names(data_list) <- c("A778_D0", "A778_D6", "A820_D0", "A820_D6", 
+                      "A870_D0", "A870_D6", "A899_D0", "A899_D6")
+
+## Inspecting the data ##
+
+# View structure and sample content of one file
+str(data_list[[1]])
+head(data_list[[1]])
+lapply(data_list, dim) # Loops dim to check the individual files' dimensions
+
+# Adding sample and timepoint metadata
+for (i in seq_along(data_list)) {
+  sample_info <- str_split(names(data_list)[i], "_", simplify = TRUE) 
+  # takes the sample name and timepoint and splits them
+  data_list[[i]] <- data_list[[i]] %>%
+    mutate(Sample = sample_info[1],
+           Time = sample_info[2])
+}
+```
+
+```{r data_summary, message=FALSE, warning=FALSE}
+## Combining the 8 files into 1 merged dataset ##
+merged_data <- bind_rows(data_list)
+head(merged_data)
+
+# Summary of read counts
+str(merged_data)
+
+# Remove unwanted ambiguous rows
+cleaned_data <- merged_data %>%
+  filter(!grepl("^_", Ensembl_ID))  
+
+# Check results
+head(cleaned_data)
+
+# Check for missing or zero values
+summary(cleaned_data$Read_Counts)
+table(cleaned_data$Read_Counts == 0)  # Count zero values
+
+# Inspect the range of Read_Counts
+range(cleaned_data$Read_Counts, na.rm = TRUE)
+quantile(cleaned_data$Read_Counts, probs = seq(0, 1, 0.05), na.rm = TRUE) 
+
+# Check summary after initial filtering
+summary(cleaned_data$Read_Counts)
+```
+
+This initial exploration helped in deciding appropriate filtering thresholds before applying DESeq2 normalization, as well as further visualization of the data. This allowed us to understand the structure further, as well as detect potential issues that have to be processed. This initial step will ensure that downstream differential expression analysis produces biologically meaningful results while mitigating bias introduced by outliers or technical artifacts.
+
+**Exploratory Analysis:**
+
+-   Summary statistics of read counts (mean, median, range).
+-   Histogram and boxplot visualizations to check the distribution of the values.
+-   PCA analysis was used to visualize and explore the data structure of the high-dimensional dataset to identify potential relationships, batch effects and any outliers.
+-   Initial DESeq2 processing, including normalization and creation of a DESeqDataset for further downstream analyses.
+
+The data processing steps produced the following plots that help illustrate the data structure for better understanding and planning of the subsequent downstream analyses planned:
+
+-   **Filtered Read Count Distribution:** This histogram shows the raw read count distribution after filtering. The highly skewed nature of the counts, with most values close to zero, indicates that raw read counts exhibit extreme variability and require transformation for proper downstream analysis.
+-   **Log-Transformed Read Count Distribution:** Applying a log10 transformation normalizes the read count distribution, reducing the impact of extreme values and making the data more interpretable. The transformation reveals a more symmetric distribution, improving the applicability of statistical analyses such as differential expression testing.
+-   **Boxplot of Read Count Distributions Per Sample:** This boxplot visualizes the read count spread across samples. The presence of outliers and high dispersion indicates inherent variability in gene expression across conditions and samples. The transformation helps mitigate these differences, making the dataset suitable for comparative analysis.
+
+```{r data_visualization, message=FALSE, warning=FALSE}
+## Visualization and additional filtering ##
+
+# Threshold for low and high count reads
+low_threshold <- 5 
+
+# Remove lowly expressed genes (≤5 reads)
+filtered_data <- cleaned_data %>% filter(Read_Counts > low_threshold)
+
+# Check how many genes remain
+cat("Number of genes after filtering low counts:", nrow(filtered_data), "\n")
+
+# Check new summary statistics
+summary(filtered_data$Read_Counts)
+
+ggplot(filtered_data, aes(x = Read_Counts)) +
+  geom_histogram(binwidth = 50, fill = "blue") +
+  theme_minimal() +
+  labs(title = "Filtered Read Count Distribution",
+       x = "Read Counts",
+       y = "Frequency")
+
+ggplot(filtered_data, aes(x = log10(Read_Counts + 1))) +
+  geom_histogram(binwidth = 0.1, fill = "blue") +
+  theme_minimal() +
+  labs(title = "Log-Transformed Read Count Distribution",
+       x = "Log10(Read Counts + 1)",
+       y = "Frequency")
+
+ggplot(filtered_data, aes(y = Read_Counts)) +
+  geom_boxplot(fill = "skyblue") +
+  theme_minimal() +
+  labs(title = "Boxplot of Read Count Distributions Per Sample",
+       x = "Sample",
+       y = "Read Counts") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+```{r data_deseq2, message=FALSE, warning=FALSE}
+
+## DESeq2 Workflow ##
+
+count_matrix <- filtered_data %>%
+  unite(Sample_ID, Sample, Time, sep = "_") %>%  
+  dplyr::select(Ensembl_ID, Sample_ID, Read_Counts) %>%  
+  pivot_wider(names_from = Sample_ID, 
+              values_from = Read_Counts, 
+              values_fill = 0) %>%
+  column_to_rownames(var = "Ensembl_ID") %>%
+  as.matrix()
+
+dim(count_matrix)  # (genes x samples) (58,726 × 8)
+colnames(count_matrix)  # Checks if sample names match
+
+sample_info <- data.frame(
+  Sample_ID = colnames(count_matrix),
+  Condition = ifelse(grepl("_D0$", colnames(count_matrix)), "Day0", "Day6")  
+  )
+
+rownames(sample_info) <- sample_info$Sample_ID  
+# Ensure row names match count_matrix
+
+dds <- DESeqDataSetFromMatrix(
+  countData = count_matrix,
+  colData = sample_info,
+  design = ~ Condition
+)
+
+dds <- dds[rowSums(counts(dds)) > low_threshold, ]
+
+dds_out <- DESeq(dds)
+
+resultsNames(dds)  # Should return "Condition_Day6_vs_Day0"
+
+res <- results(dds_out)
+
+# Perform PCA on transposed normalized counts
+rlog_counts <- rlog(dds)
+pca_data <- prcomp(t(assay(rlog_counts)))
+
+# Convert PCA results into a dataframe
+pca_df <- as.data.frame(pca_data$x)  # Extract PCA coordinates
+pca_df$Sample <- rownames(pca_df)  
+
+# Merge PCA results with sample metadata
+pca_df <- left_join(pca_df, sample_info, by = c("Sample" = "Sample_ID"))
+
+# Plot PCA using ggplot2
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Condition, label = Sample)) +
+  geom_point(size = 4, alpha = 0.8) +  # Add points
+  geom_text(vjust = -1) +  # Add sample labels
+  theme_minimal() +
+  labs(title = "PCA Plot of RNA-seq Samples",
+       x = paste0("PC1 (", round(100 * summary(pca_data)$importance[2,1], 1),
+                  "% Variance)"),
+       y = paste0("PC2 (", round(100 * summary(pca_data)$importance[2,2], 1),
+                  "% Variance)"))
+```
+
+The **PCA plot** revealed clustering primarily by patient rather than by time point. This suggests that inter-patient variability plays a significant role in gene expression patterns, potentially overshadowing the effect of short-term culture conditions. Although we observed separation along PC1, indicating some transcriptomic shifts between Day 0 and Day 6, the clustering by patient highlights inherent biological differences between organoid models derived from different individuals. This finding may suggest that patient-specific factors, such as genetic background or prior treatment history, could be influencing gene expression changes during short-term culture. Further analysis should involve investigating into whether specific gene sets drive these patient-specific variations.
+
+### **4. Approach to Answering Research Questions**
+
+#### **Steps and Methodology:**
+
+1.  **Preprocessing:**
+    -   Normalized raw read counts using a method like DESeq2 median-ratio and rlog transformation after filtering low-expressed genes.
+2.  **Differential Expression Analysis:**
+    -   Compared Day 0 and Day 6 samples for significantly up- or downregulated genes using DESeq2.
+
+    -   Identified significant genes potentially related to cell survival, proliferation and metabolism to assess stress response.
+
+    -   GO/KEGG Enrichment was conducted for pathway identification
+3.  **Visualization and Interpretation:**
+    -   Generated heatmaps for visualizing patterns of gene expression changes across samples.
+
+    -   Included volcano plots to identify differentially expressed genes across the samples
+
+    -   Dot plots were generated to illustrate the the results of the GO/KEGG pathway enrichment
+
+### **5. Anticipated Roadblocks and Solutions**
+
+**High Variability in Gene Expression Across Samples:**
+
+Individual patient samples may exhibit variability due to differences in tumor microenvironment, genetic background, or prior treatment history.
+
+-   Solutions:
+    -   We can apply **log-transformation (log2(counts +1))** before visualization to quickly check.
+    -   Can also use **DESeq2 normalization** to account for sequencing depth differences.
+    -   Filtering out **lowly expressed genes** to improve statistical power.
+
+**Batch Effects & Technical Variability:**
+
+Samples from different patients may have batch effects due to variations in sequencing runs or sample preparation.
+
+-   Solutions:
+    -   To solve this, we can perform **PCA analysis** to identify batch effects.
+
+    -   We can also use **Combat-Seq** (sva) or **RemoveBatchEffect** (limma) if needed, for preservation of biological differences and when handling log-transformed expression values.
+
+**Small Sample Size & Low Statistical Power**
+
+Given that we only have 4 sets of patient-derived organoids, with 8 samples overall, the statistical power for detecting differentially expressed genes may be somewhat low, leading to high false discovery rates or a failure to detect more subtle, yet biologically relevant changes that would otherwise be seen in a larger dataset.
+
+-   Solutions:
+    -   In an effort to solve this, paired differential expression may be used to account for individual differences in the data and increase statistical power
+
+    -   Gene Set Enrichment Analysis can also be conducted to aggregate data into gene sets, rather than focusing on individual genes.
+
+**Difficulty in Detecting Chemotherapy Resistance Markers**
+
+One of the most common use cases of HGSOCs are for identifying chemotherapy resistance markers in patients. However, these mechanisms, like that with stress response and cell survival, typically involve multiple genes working in conjunction as well as pathways. As such, transient changes in stress response genes may not reflect long-term chemotherapy resistance.
+
+-   Solutions:
+    -   Usage of pathway-level analysis instead of focusing on individual genes or markers.
+
+    -   Comparison of the results with public HGSOC datasets from The Cancer Genome Atlas (TCGA) and Gene Expression Omnibus (GEO), as these are likely to have larger patient cohorts and thus viable for benchmarking purposes.
+
+### **6. References**
+
+1.  Chen H., Gotimer K., De Souza C., Tepper CG., Karnezis AN., Leiserowitz GS., Chien J., Smith LH. (2020). Short-term organoid culture for drug sensitivity testing of high-grade serous carcinoma. Gynecol Oncol. 157(3):783-792. doi: 10.1016/j.ygyno.2020.03.026.
+
+2.  Nero C., Vizzielli G., Lorusso D., Cesari E., Daniele G., Loverro M., Scambia G., Sette C. (2021). Patient-derived organoids and high grade serous ovarian cancer: from disease modeling to personalized medicine. J Exp Clin Cancer Res. 40(1):116. doi: 10.1186/s13046-021-01917-7.
+
+3.  Maenhoudt N., Defraye C., Boretto M., Jan Z., Heremans R., Boeckx B., Hermans F., Arijs I., Cox B., Van Nieuwenhuysen E., Vergote I., Van Rompuy AS., Lambrechts D., Timmerman D., Vankelecom H. (2020). Developing Organoids from Ovarian Cancer as Experimental and Preclinical Models. Stem Cell Reports. 14(4):717-729. doi: 10.1016/j.stemcr.2020.03.004.
+
+### 7. Feedback from Previous Version
+
+-   Great work on the preliminary analysis!
+    -   Although lacking some **interpretation of the analysis** (eg: what does it mean in your PCA plot that the points cluster by patient rather than by time point?)
+-   You only needed one roadblock, but you proposed many
+
+```{=html}
+<!-- -->
+```
+-   Very much appreciated that you considered a technical roadblock (small sample size) and a big picture roadblock (Diﬀiculty in Detecting Chemotherapy Resistance Markers)
+-   Batch correction is a good idea overall but is not exactly appropriate for this dataset without batch information
+    -   Using different samples as different batches would get rid of any sample-to-sample biological variation too and is not suggested except for very specific analyses
+
+```{=html}
+<!-- -->
+```
+-   Would have appreciated more detail about the **planned analysis** and **figures** for answering your research question
+
+-   Some comments in the code are excessive (3 comments for a single line of code is way too much) and limiting reading clarity
+
+    -   Try focusing on the big picture when commenting rather than explaining every bit of code

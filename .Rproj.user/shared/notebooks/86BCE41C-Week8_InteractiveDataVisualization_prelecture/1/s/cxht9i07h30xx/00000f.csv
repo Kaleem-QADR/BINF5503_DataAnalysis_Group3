@@ -1,0 +1,4 @@
+"0",""
+"0","# Fit the linear model"
+"0","fit_bc <- lm(texture_mean ~ radius_mean, bCancer)"
+"0",""

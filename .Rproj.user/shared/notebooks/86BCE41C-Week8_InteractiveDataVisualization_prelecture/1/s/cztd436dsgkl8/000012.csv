@@ -1,0 +1,6 @@
+"0",""
+"0","ggplot(bCancer, aes(x = smoothness_mean_cat, y = radius_mean, fill = smoothness_mean_cat)) +"
+"0","  geom_boxplot(outlier.shape = NA) +"
+"0","  stat_boxplot(geom = ""errorbar"") +"
+"0","  geom_jitter(width = 0.2, height = 0) +"
+"0","  theme_classic()"

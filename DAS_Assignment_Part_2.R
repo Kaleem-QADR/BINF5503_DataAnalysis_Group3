@@ -7,7 +7,6 @@ library(pheatmap)
 library(RColorBrewer)
 library(clusterProfiler)
 library(org.Hs.eg.db)
-library(biomaRt)
 
 
 # ============================

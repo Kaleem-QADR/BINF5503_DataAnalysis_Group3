@@ -1,0 +1,8 @@
+"0","# Example usage:"
+"0","lmFunction(""radius_mean"", ""texture_mean"")"
+"2","The formula to model radius_mean is: texture_mean = 13.71 + 0.4*radius_mean
+"
+"2","The intercept is: 13.71
+"
+"2","The slope of radius_mean is 0.4
+"
